@@ -1,0 +1,15 @@
+{
+  "name": "care360",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "dev:client": "npm --prefix \"client CARE360\" run dev",
+    "dev:server": "npm --prefix server run dev",
+    "build": "npm --prefix \"client CARE360\" run build",
+    "test": "npm --prefix server test",
+    "db:validate": "npm --prefix server run db:validate",
+    "db:generate": "npm --prefix server run db:generate",
+    "db:migrate": "npm --prefix server run db:migrate"
+  },
+  "type": "module"
+}

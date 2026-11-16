@@ -1,0 +1,228 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PATIENT
+  FAMILY
+  CARETAKER
+  ADMIN
+}
+
+enum DoseStatus {
+  TAKEN
+  NOT_TAKEN
+  UNCONFIRMED
+}
+
+model User {
+  id                  String                @id @default(cuid())
+  email               String                @unique
+  passwordHash        String
+  name                String
+  role                Role                  @default(PATIENT)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  patient             PatientProfile?
+  access              PatientAccess[]       @relation("Viewer")
+  caretakerAssignments CaretakerAssignment[] @relation("Caretaker")
+  preferences         UserPreference?
+  confirmedDoses      DoseLog[]              @relation("DoseConfirmer")
+}
+
+model PatientProfile {
+  id            String                @id @default(cuid())
+  userId        String                @unique
+  phone         String?
+  address       String?
+  emergencyDetails String?
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  medications   Medication[]
+  appointments  Appointment[]
+  contacts      EmergencyContact[]
+  documents     MedicalDocument[]
+  wellness      WellnessLog[]
+  emergencies   EmergencyEvent[]
+  notifications Notification[]
+  access        PatientAccess[]
+  assignments   CaretakerAssignment[]
+  activity      ActivityLog[]
+}
+
+model PatientAccess {
+  id              String         @id @default(cuid())
+  patientId       String
+  viewerId        String
+  canViewMedical  Boolean        @default(false)
+  canManageCare   Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  patient         PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  viewer          User           @relation("Viewer", fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, viewerId])
+  @@index([viewerId])
+}
+
+model CaretakerAssignment {
+  id          String         @id @default(cuid())
+  patientId   String
+  caretakerId String
+  createdAt   DateTime       @default(now())
+  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  caretaker   User           @relation("Caretaker", fields: [caretakerId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, caretakerId])
+  @@index([caretakerId])
+}
+
+model Medication {
+  id           String              @id @default(cuid())
+  patientId    String
+  name         String
+  dosage       String
+  frequency    String
+  instructions String?
+  active       Boolean             @default(true)
+  startDate    DateTime?
+  endDate      DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  patient      PatientProfile      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  schedules    MedicationSchedule[]
+  logs         DoseLog[]
+
+  @@index([patientId, active])
+}
+
+model MedicationSchedule {
+  id           String     @id @default(cuid())
+  medicationId String
+  time         String
+  timezone     String     @default("Asia/Kolkata")
+  medication   Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+
+  @@index([medicationId])
+}
+
+model DoseLog {
+  id          String     @id @default(cuid())
+  medicationId String
+  patientId   String
+  scheduledAt DateTime
+  status      DoseStatus @default(UNCONFIRMED)
+  confirmedBy String?
+  confirmedAt DateTime?
+  medication  Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  confirmer   User?      @relation("DoseConfirmer", fields: [confirmedBy], references: [id], onDelete: SetNull)
+
+  @@unique([medicationId, scheduledAt])
+  @@index([patientId, scheduledAt])
+}
+
+model Appointment {
+  id          String         @id @default(cuid())
+  patientId   String
+  doctorName  String
+  clinic      String?
+  scheduledAt DateTime
+  purpose     String?
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, scheduledAt])
+}
+
+model EmergencyContact {
+  id           String         @id @default(cuid())
+  patientId    String
+  name         String
+  email        String?
+  phone        String?
+  relationship String?
+  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+model EmergencyEvent {
+  id        String         @id @default(cuid())
+  patientId String
+  status    String         @default("PENDING")
+  details   String?
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime       @default(now())
+  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, createdAt])
+}
+
+model MedicalDocument {
+  id         String         @id @default(cuid())
+  patientId  String
+  name       String
+  storageKey String
+  mimeType   String
+  size       Int
+  verified   Boolean        @default(false)
+  uploadedAt DateTime       @default(now())
+  patient    PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, uploadedAt])
+}
+
+model WellnessLog {
+  id         String         @id @default(cuid())
+  patientId  String
+  date       DateTime
+  waterMl    Int            @default(0)
+  steps      Int            @default(0)
+  meals      Int            @default(0)
+  sleepHours Float?
+  notes      String?
+  patient    PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, date])
+  @@index([patientId, date])
+}
+
+model Notification {
+  id          String         @id @default(cuid())
+  patientId   String
+  type        String
+  channel     String
+  status      String         @default("QUEUED")
+  scheduledAt DateTime
+  sentAt      DateTime?
+  dedupeKey   String         @unique
+  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt])
+}
+
+model ActivityLog {
+  id        String         @id @default(cuid())
+  patientId String
+  action    String
+  details   Json?
+  createdAt DateTime       @default(now())
+  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, createdAt])
+}
+
+model UserPreference {
+  id              String @id @default(cuid())
+  userId          String @unique
+  language        String @default("en")
+  timezone        String @default("Asia/Kolkata")
+  reminderMinutes Int    @default(30)
+  user            User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
